@@ -117,7 +117,7 @@ public class TestCheckIndex extends LuceneTestCase {
 
   public void testLuceneConstantVersion() throws IOException {
     // common-build.xml sets lucene.version
-    final String version = System.getProperty("lucene.version");
+    final String version = System.getProperty("lucene.version").replaceFirst("-SB(-M?[\\d\\.]+)?", "");
     assertNotNull( "null version", version);
     final String constantVersion;
     String parts[] = Constants.LUCENE_MAIN_VERSION.split("\\.");
