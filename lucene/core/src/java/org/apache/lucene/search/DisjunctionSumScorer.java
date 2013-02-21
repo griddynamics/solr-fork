@@ -23,7 +23,7 @@ import java.io.IOException;
 /** A Scorer for OR like queries, counterpart of <code>ConjunctionScorer</code>.
  * This Scorer implements {@link Scorer#advance(int)} and uses advance() on the given Scorers. 
  */
-class DisjunctionSumScorer extends DisjunctionScorer { 
+public class DisjunctionSumScorer extends DisjunctionScorer { 
   /** The minimum number of scorers that should match. */
   private final int minimumNrMatchers;
   

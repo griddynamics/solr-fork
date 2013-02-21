@@ -24,7 +24,7 @@ import java.util.Collection;
  * Base class for Scorers that score disjunctions.
  * Currently this just provides helper methods to manage the heap.
  */
-abstract class DisjunctionScorer extends Scorer {
+public abstract class DisjunctionScorer extends Scorer {
   protected final Scorer subScorers[];
   protected int numScorers;
   

@@ -34,13 +34,13 @@ import org.apache.lucene.search.similarities.Similarity;
  * <br>Implements skipTo(), and has no limitations on the numbers of added scorers.
  * <br>Uses ConjunctionScorer, DisjunctionScorer, ReqOptScorer and ReqExclScorer.
  */
-class BooleanScorer2 extends Scorer {
+public class BooleanScorer2 extends Scorer {
   
-  private final List<Scorer> requiredScorers;
-  private final List<Scorer> optionalScorers;
-  private final List<Scorer> prohibitedScorers;
+  protected final List<Scorer> requiredScorers;
+  protected final List<Scorer> optionalScorers;
+  protected final List<Scorer> prohibitedScorers;
 
-  private class Coordinator {
+  protected class Coordinator {
     final float coordFactors[];
 
     Coordinator(int maxCoord, boolean disableCoord) {
@@ -50,18 +50,18 @@ class BooleanScorer2 extends Scorer {
       }
     }
     
-    int nrMatchers; // to be increased by score() of match counting scorers.
+    public int nrMatchers; // to be increased by score() of match counting scorers.
   }
 
-  private final Coordinator coordinator;
+  protected final Coordinator coordinator;
 
   /** The scorer to which all scoring will be delegated,
    * except for computing and using the coordination factor.
    */
-  private final Scorer countingSumScorer;
+  protected final Scorer countingSumScorer;
 
   /** The number of optionalScorers that need to match (if there are any) */
-  private final int minNrShouldMatch;
+  protected final int minNrShouldMatch;
 
   private int doc = -1;
 
@@ -103,14 +103,14 @@ class BooleanScorer2 extends Scorer {
   }
   
   /** Count a scorer as a single match. */
-  private class SingleMatchScorer extends Scorer {
-    private Scorer scorer;
+  protected class SingleMatchScorer extends Scorer {
+    protected Scorer scorer;
     private int lastScoredDoc = -1;
     // Save the score of lastScoredDoc, so that we don't compute it more than
     // once in score().
     private float lastDocScore = Float.NaN;
 
-    SingleMatchScorer(Scorer scorer) {
+    protected SingleMatchScorer(Scorer scorer) {
       super(scorer.weight);
       this.scorer = scorer;
     }
@@ -149,7 +149,7 @@ class BooleanScorer2 extends Scorer {
     }
   }
 
-  private Scorer countingDisjunctionSumScorer(final List<Scorer> scorers,
+  protected Scorer countingDisjunctionSumScorer(final List<Scorer> scorers,
       int minNrShouldMatch) throws IOException {
     // each scorer from the list counted as a single matcher
     return new DisjunctionSumScorer(weight, scorers, minNrShouldMatch) {
@@ -171,7 +171,7 @@ class BooleanScorer2 extends Scorer {
     };
   }
 
-  private Scorer countingConjunctionSumScorer(boolean disableCoord,
+  protected Scorer countingConjunctionSumScorer(boolean disableCoord,
                                               List<Scorer> requiredScorers) throws IOException {
     // each scorer from the list counted as a single matcher
     final int requiredNrMatchers = requiredScorers.size();
@@ -198,7 +198,7 @@ class BooleanScorer2 extends Scorer {
     };
   }
 
-  private Scorer dualConjunctionSumScorer(boolean disableCoord,
+  protected Scorer dualConjunctionSumScorer(boolean disableCoord,
                                                 Scorer req1, Scorer req2) throws IOException { // non counting.
     return new ConjunctionScorer(weight, req1, req2);
     // All scorers match, so defaultSimilarity always has 1 as
@@ -210,13 +210,13 @@ class BooleanScorer2 extends Scorer {
   /** Returns the scorer to be used for match counting and score summing.
    * Uses requiredScorers, optionalScorers and prohibitedScorers.
    */
-  private Scorer makeCountingSumScorer(boolean disableCoord) throws IOException { // each scorer counted as a single matcher
+  protected Scorer makeCountingSumScorer(boolean disableCoord) throws IOException { // each scorer counted as a single matcher
     return (requiredScorers.size() == 0)
       ? makeCountingSumScorerNoReq(disableCoord)
       : makeCountingSumScorerSomeReq(disableCoord);
   }
 
-  private Scorer makeCountingSumScorerNoReq(boolean disableCoord) throws IOException { // No required scorers
+  protected Scorer makeCountingSumScorerNoReq(boolean disableCoord) throws IOException { // No required scorers
     // minNrShouldMatch optional scorers are required, but at least 1
     int nrOptRequired = (minNrShouldMatch < 1) ? 1 : minNrShouldMatch;
     Scorer requiredCountingSumScorer;
@@ -230,7 +230,7 @@ class BooleanScorer2 extends Scorer {
     return addProhibitedScorers(requiredCountingSumScorer);
   }
 
-  private Scorer makeCountingSumScorerSomeReq(boolean disableCoord) throws IOException { // At least one required scorer.
+  protected Scorer makeCountingSumScorerSomeReq(boolean disableCoord) throws IOException { // At least one required scorer.
     if (optionalScorers.size() == minNrShouldMatch) { // all optional scorers also required.
       ArrayList<Scorer> allReq = new ArrayList<Scorer>(requiredScorers);
       allReq.addAll(optionalScorers);
@@ -263,7 +263,7 @@ class BooleanScorer2 extends Scorer {
    * Uses the given required scorer and the prohibitedScorers.
    * @param requiredCountingSumScorer A required scorer already built.
    */
-  private Scorer addProhibitedScorers(Scorer requiredCountingSumScorer) throws IOException
+  protected Scorer addProhibitedScorers(Scorer requiredCountingSumScorer) throws IOException
   {
     return (prohibitedScorers.size() == 0)
           ? requiredCountingSumScorer // no prohibited

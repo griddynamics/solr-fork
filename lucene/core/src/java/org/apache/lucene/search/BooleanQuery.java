@@ -168,7 +168,7 @@ public class BooleanQuery extends Query implements Iterable<BooleanClause> {
    * <p>NOTE: this API and implementation is subject to
    * change suddenly in the next release.</p>
    */
-  protected class BooleanWeight extends Weight {
+  public class BooleanWeight extends Weight {
     /** The Similarity implementation. */
     protected Similarity similarity;
     protected ArrayList<Weight> weights;
