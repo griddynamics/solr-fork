@@ -748,4 +748,18 @@
       </build>
     </profile>
   </profiles>
+  
+  <distributionManagement>
+    <repository>
+      <id>ecommerce-releases</id>
+      <name>GD eCommerce framework release repo</name>
+      <url>https://nexus.griddynamics.net/nexus/content/repositories/ecommerce-releases</url>
+    </repository>
+    <snapshotRepository>
+      <id>ecommerce-snapshots</id>
+      <name>GD eCommerce framework snapshot repo</name>
+      <url>https://nexus.griddynamics.net/nexus/content/repositories/ecommerce-snapshots</url>
+      <uniqueVersion>false</uniqueVersion>
+    </snapshotRepository>
+  </distributionManagement>
 </project>
