@@ -24,6 +24,7 @@ import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.grouping.GroupDocs;
 import org.apache.lucene.search.grouping.TopGroups;
+import org.apache.lucene.search.join.TraversableToParentBlockJoinQuery.TraversableBlockJoinScorer;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.*;
 
@@ -1054,6 +1055,198 @@ public class TestBlockJoin extends LuceneTestCase {
     Weight weight = s.createNormalizedWeight(q);
     DocIdSetIterator disi = weight.scorer(s.getIndexReader().leaves().get(0), true, true, null);
     assertEquals(2, disi.advance(0));
+
+    TraversableToParentBlockJoinQuery traversableQ = new TraversableToParentBlockJoinQuery(tq, parentFilter);
+    Weight traversableWeight = s.createNormalizedWeight(traversableQ);
+    TraversableBlockJoinScorer traversableScorer = (TraversableBlockJoinScorer) traversableWeight.scorer(s.getIndexReader().leaves().get(0), true, true, null);
+    assertEquals(2, traversableScorer.advance(0));
+
+    r.close();
+    dir.close();
+  }
+
+  public void testRandomAdvanceTraversable() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(new LogDocMergePolicy()));
+    Document parentDoc = new Document();
+    parentDoc.add(newStringField("parent", "1", Field.Store.NO));
+    parentDoc.add(newStringField("isparent", "yes", Field.Store.NO));
+    w.addDocuments(Arrays.asList(parentDoc));
+
+
+    // Add another docs so scorer is not null
+    List<List<Document>> docs = new ArrayList<List<Document>>();
+    for (int i = 2; i < 6; ++i) {
+      parentDoc = new Document();
+      parentDoc.add(newStringField("parent", Integer.toString(i), Field.Store.YES));
+      parentDoc.add(newStringField("isparent", "yes", Field.Store.YES));
+      Document childDoc = new Document();
+      if (random().nextBoolean()) {
+        childDoc.add(newStringField("child", "2", Field.Store.YES));
+      } else {
+        childDoc.add(newStringField("child", "1", Field.Store.YES));
+      }
+      docs.add(Arrays.asList(childDoc, parentDoc));
+    }
+    Collections.shuffle(docs, random());
+    for (List<Document> block : docs) {
+      w.addDocuments(block);
+    }
+
+    // Need single seg:
+    w.forceMerge(1);
+    IndexReader r = w.getReader();
+    w.close();
+    IndexSearcher s = newSearcher(r);
+    Query tq = new TermQuery(new Term("child", "2"));
+    Filter parentFilter = new CachingWrapperFilter(
+                            new QueryWrapperFilter(
+                              new TermQuery(new Term("isparent", "yes"))));
+
+    TraversableToParentBlockJoinQuery q = new TraversableToParentBlockJoinQuery(tq, parentFilter);
+    Weight weight = s.createNormalizedWeight(q);
+    TraversableBlockJoinScorer traversableScorer = (TraversableBlockJoinScorer) weight.scorer(s.getIndexReader().leaves().get(0), true, true, null);
+
+    traversableScorer.advance(random().nextInt(9));
+    assertTrue(traversableScorer.nextChildDoc + 1 == traversableScorer.docID() ||
+               (traversableScorer.nextChildDoc == DocIdSetIterator.NO_MORE_DOCS && traversableScorer.docID() == DocIdSetIterator.NO_MORE_DOCS));
+
+    r.close();
+    dir.close();
+  }
+
+  public void testNextChild() throws Exception {
+
+    final Directory dir = newDirectory();
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+
+    final List<Document> docs = new ArrayList<Document>();
+    docs.add(makeJob("java", 2007));
+    docs.add(makeJob("python", 2010));
+    Collections.shuffle(docs, random());
+    docs.add(makeResume("Lisa", "United Kingdom"));
+
+    final List<Document> docs2 = new ArrayList<Document>();
+    docs2.add(makeJob("ruby", 2005));
+    docs2.add(makeJob("java", 2006));
+    Collections.shuffle(docs2, random());
+    docs2.add(makeResume("Frank", "United States"));
+
+    addSkillless(w);
+    boolean turn = random().nextBoolean();
+    w.addDocuments(turn ? docs:docs2);
+
+    addSkillless(w);
+
+    w.addDocuments(!turn ? docs:docs2);
+
+    addSkillless(w);
+
+    IndexReader r = w.getReader();
+    w.close();
+    IndexSearcher s = newSearcher(r);
+
+    // Create a filter that defines "parent" documents in the index - in this case resumes
+    Filter parentsFilter = new CachingWrapperFilter(new QueryWrapperFilter(new TermQuery(new Term("docType", "resume"))));
+
+    // Define child document criteria (finds an example of relevant work experience)
+    BooleanQuery childQuery = new BooleanQuery();
+    childQuery.add(new BooleanClause(new TermQuery(new Term("skill", "java")), Occur.MUST));
+    childQuery.add(new BooleanClause(NumericRangeQuery.newIntRange("year", 2006, 2011, true, true), Occur.MUST));
+
+    // Define parent document criteria (find a resident in the UK)
+    Query parentQuery = new TermQuery(new Term("country", "United Kingdom"));
+
+    // Wrap the child document query to 'join' any matches
+    // up to corresponding parent:
+    TraversableToParentBlockJoinQuery childJoinQuery = new TraversableToParentBlockJoinQuery(childQuery, parentsFilter);
+
+    Weight weight = s.createNormalizedWeight(childJoinQuery);
+    TraversableBlockJoinScorer traversableScorer = (TraversableBlockJoinScorer) weight.scorer(s.getIndexReader().leaves().get(0), true, true, null);
+    List<Integer> childDocs = new ArrayList<Integer>();
+
+    while (traversableScorer.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+      do {
+        childDocs.add(traversableScorer.nextChildDoc);
+      } while (traversableScorer.nextChild() != TraversableBlockJoinScorer.NO_MORE_CHILDREN);
+    }
+
+    assertEquals(2, childDocs.size());
+    for (Integer childDoc : childDocs) {
+      assertEquals("java", r.document(childDoc).get("skill"));
+      int year = Integer.parseInt(r.document(childDoc).get("year"));
+      assertTrue(year >= 2006 && year <= 2011);
+    }
+
+    r.close();
+    dir.close();
+  }
+
+  public void testFilterTraversableToParentBJQ() throws Exception {
+
+    final Directory dir = newDirectory();
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+
+    final List<Document> docs = new ArrayList<Document>();
+    docs.add(makeJob("java", 2007));
+    docs.add(makeJob("python", 2010));
+    Collections.shuffle(docs, random());
+    docs.add(makeResume("Lisa", "United Kingdom"));
+
+    final List<Document> docs2 = new ArrayList<Document>();
+    docs2.add(makeJob("ruby", 2005));
+    docs2.add(makeJob("java", 2006));
+    Collections.shuffle(docs2, random());
+    docs2.add(makeResume("Frank", "United States"));
+
+    addSkillless(w);
+    boolean turn = random().nextBoolean();
+    w.addDocuments(turn ? docs:docs2);
+
+    addSkillless(w);
+
+    w.addDocuments(!turn ? docs:docs2);
+
+    addSkillless(w);
+
+    IndexReader r = w.getReader();
+    w.close();
+    IndexSearcher s = newSearcher(r);
+
+    // Create a filter that defines "parent" documents in the index - in this case resumes
+    Filter parentsFilter = new CachingWrapperFilter(new QueryWrapperFilter(new TermQuery(new Term("docType", "resume"))));
+
+    // Define child document criteria (finds an example of relevant work experience)
+    BooleanQuery childQuery = new BooleanQuery();
+    childQuery.add(new BooleanClause(new TermQuery(new Term("skill", "java")), Occur.MUST));
+    childQuery.add(new BooleanClause(NumericRangeQuery.newIntRange("year", 2006, 2011, true, true), Occur.MUST));
+
+    // Define parent document criteria (find a resident in the UK)
+    Query parentQuery = new TermQuery(new Term("country", "United Kingdom"));
+
+    // Wrap the child document query to 'join' any matches
+    // up to corresponding parent:
+    TraversableToParentBlockJoinQuery childJoinQuery = new TraversableToParentBlockJoinQuery(childQuery, parentsFilter);
+
+    assertEquals("no filter - both passed", 2, s.search(childJoinQuery, 10).totalHits);
+
+    assertEquals("dummy filter passes everyone ", 2, s.search(childJoinQuery, parentsFilter, 10).totalHits);
+    assertEquals("dummy filter passes everyone ", 2, s.search(childJoinQuery, new QueryWrapperFilter(new TermQuery(new Term("docType", "resume"))), 10).totalHits);
+
+    // not found test
+    assertEquals("noone live there", 0, s.search(childJoinQuery, new CachingWrapperFilter(new QueryWrapperFilter(new TermQuery(new Term("country", "Oz")))), 1).totalHits);
+    assertEquals("noone live there", 0, s.search(childJoinQuery, new QueryWrapperFilter(new TermQuery(new Term("country", "Oz"))), 1).totalHits);
+
+    // apply the UK filter by the searcher
+    TopDocs ukOnly = s.search(childJoinQuery, new QueryWrapperFilter(parentQuery), 1);
+    assertEquals("has filter - single passed", 1, ukOnly.totalHits);
+    assertEquals( "Lisa", r.document(ukOnly.scoreDocs[0].doc).get("name"));
+
+    // looking for US candidates
+    TopDocs usThen = s.search(childJoinQuery , new QueryWrapperFilter(new TermQuery(new Term("country", "United States"))), 1);
+    assertEquals("has filter - single passed", 1, usThen.totalHits);
+    assertEquals("Frank", r.document(usThen.scoreDocs[0].doc).get("name"));
+
     r.close();
     dir.close();
   }

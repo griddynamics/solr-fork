@@ -18,8 +18,13 @@
 package org.apache.solr.update.processor;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.*;
@@ -66,7 +71,12 @@ class RunUpdateProcessor extends UpdateRequestProcessor
          "RunUpdateProcessor has recieved an AddUpdateCommand containing a document that appears to still contain Atomic document update operations, most likely because DistributedUpdateProcessorFactory was explicitly disabled from this updateRequestProcessorChain");
     }
 
-    updateHandler.addDoc(cmd);
+    if (cmd.solrDoc.hasChildDocuments()) {
+      updateHandler.addBlock(blockCommand(cmd));  
+    } else {
+      updateHandler.addDoc(cmd);
+    }
+    
     super.processAdd(cmd);
     changesSinceCommit = true;
   }
@@ -115,6 +125,23 @@ class RunUpdateProcessor extends UpdateRequestProcessor
       updateHandler.getUpdateLog().finish(null);
     }
     super.finish();
+  }
+  
+  private AddBlockUpdateCommand blockCommand(AddUpdateCommand cmd) {
+    final AddBlockUpdateCommand blockCmd = new AddBlockUpdateCommand(cmd.getReq());
+    List<SolrInputDocument> unwrappedDocs = new ArrayList<SolrInputDocument>();
+    recUnwrapp(unwrappedDocs, cmd.solrDoc);
+    Collections.reverse(unwrappedDocs);
+    blockCmd.setDocs(unwrappedDocs); 
+
+    return blockCmd;
+  }
+  
+  private void recUnwrapp(List<SolrInputDocument> unwrappedDocs, SolrInputDocument currentDoc) {
+    unwrappedDocs.add(currentDoc);  
+    for (SolrInputDocument child : currentDoc.getChildDocuments()) {
+      recUnwrapp(unwrappedDocs, child);  
+    }
   }
 }
 

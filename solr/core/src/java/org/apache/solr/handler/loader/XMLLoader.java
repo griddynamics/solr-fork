@@ -60,6 +60,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -381,6 +382,9 @@ public class XMLLoader extends ContentStreamLoader {
     float boost = 1.0f;
     boolean isNull = false;
     String update = null;
+    
+    Collection<SolrInputDocument> subDocs = null;
+    
     Map<String, Map<String, Object>> updateMap = null;
     boolean complete = false;
     while (!complete) {
@@ -395,6 +399,10 @@ public class XMLLoader extends ContentStreamLoader {
 
         case XMLStreamConstants.END_ELEMENT:
           if ("doc".equals(parser.getLocalName())) {
+            if (subDocs != null && !subDocs.isEmpty()) {
+              doc.addChildDocuments(subDocs);
+              subDocs = null;
+            }
             complete = true;
             break;
           } else if ("field".equals(parser.getLocalName())) {
@@ -431,30 +439,37 @@ public class XMLLoader extends ContentStreamLoader {
         case XMLStreamConstants.START_ELEMENT:
           text.setLength(0);
           String localName = parser.getLocalName();
-          if (!"field".equals(localName)) {
-            log.warn("unexpected XML tag doc/" + localName);
-            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
-                    "unexpected XML tag doc/" + localName);
-          }
-          boost = 1.0f;
-          update = null;
-          String attrVal = "";
-          for (int i = 0; i < parser.getAttributeCount(); i++) {
-            attrName = parser.getAttributeLocalName(i);
-            attrVal = parser.getAttributeValue(i);
-            if ("name".equals(attrName)) {
-              name = attrVal;
-            } else if ("boost".equals(attrName)) {
-              boost = Float.parseFloat(attrVal);
-            } else if ("null".equals(attrName)) {
-              isNull = StrUtils.parseBoolean(attrVal);
-            } else if ("update".equals(attrName)) {
-              update = attrVal;
-            } else {
-              log.warn("Unknown attribute doc/field/@" + attrName);
+          if ("doc".equals(localName)) {
+            if (subDocs == null) {
+              subDocs = new ArrayList<SolrInputDocument>();
             }
-          }
-          break;
+            subDocs.add(readDoc(parser));          
+          } else {
+            if (!"field".equals(localName)) {
+              log.warn("unexpected XML tag doc/" + localName);
+              throw new SolrException(SolrException.ErrorCode.BAD_REQUEST,
+                      "unexpected XML tag doc/" + localName);
+            }
+            boost = 1.0f;
+            update = null;
+            String attrVal = "";
+            for (int i = 0; i < parser.getAttributeCount(); i++) {
+              attrName = parser.getAttributeLocalName(i);
+              attrVal = parser.getAttributeValue(i);
+              if ("name".equals(attrName)) {
+                name = attrVal;
+              } else if ("boost".equals(attrName)) {
+                boost = Float.parseFloat(attrVal);
+              } else if ("null".equals(attrName)) {
+                isNull = StrUtils.parseBoolean(attrVal);
+              } else if ("update".equals(attrName)) {
+                update = attrVal;
+              } else {
+                log.warn("Unknown attribute doc/field/@" + attrName);
+              }
+            }
+          }  
+          break;          
       }
     }
 

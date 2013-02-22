@@ -29,8 +29,8 @@ import org.apache.lucene.index.IndexWriter;       // javadocs
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.ComplexExplanation;
 import org.apache.lucene.search.DocIdSet;
-import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Explanation;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
@@ -83,21 +83,12 @@ import org.apache.lucene.util.FixedBitSet;
  *
  * @lucene.experimental
  */
-public class ToParentBlockJoinQuery extends Query {
+public class ToParentBlockJoinQuery extends TraversableToParentBlockJoinQuery {
 
-  private final Filter parentsFilter;
-  private final Query childQuery;
-
-  // If we are rewritten, this is the original childQuery we
-  // were passed; we use this for .equals() and
-  // .hashCode().  This makes rewritten query equal the
-  // original, so that user does not have to .rewrite() their
-  // query before searching:
-  private final Query origChildQuery;
   private final ScoreMode scoreMode;
 
   /** Create a ToParentBlockJoinQuery.
-   * 
+   *
    * @param childQuery Query matching child documents.
    * @param parentsFilter Filter (must produce FixedBitSet
    * per-segment) identifying the parent documents.
@@ -105,18 +96,12 @@ public class ToParentBlockJoinQuery extends Query {
    * into a single parent score.
    **/
   public ToParentBlockJoinQuery(Query childQuery, Filter parentsFilter, ScoreMode scoreMode) {
-    super();
-    this.origChildQuery = childQuery;
-    this.childQuery = childQuery;
-    this.parentsFilter = parentsFilter;
+    super(childQuery, parentsFilter);
     this.scoreMode = scoreMode;
   }
 
   private ToParentBlockJoinQuery(Query origChildQuery, Query childQuery, Filter parentsFilter, ScoreMode scoreMode) {
-    super();
-    this.origChildQuery = origChildQuery;
-    this.childQuery = childQuery;
-    this.parentsFilter = parentsFilter;
+    super(origChildQuery, childQuery, parentsFilter);
     this.scoreMode = scoreMode;
   }
 
@@ -125,33 +110,12 @@ public class ToParentBlockJoinQuery extends Query {
     return new BlockJoinWeight(this, childQuery.createWeight(searcher), parentsFilter, scoreMode);
   }
 
-  private static class BlockJoinWeight extends Weight {
-    private final Query joinQuery;
-    private final Weight childWeight;
-    private final Filter parentsFilter;
+  private static class BlockJoinWeight extends TraversableBlockJoinWeight {
     private final ScoreMode scoreMode;
 
     public BlockJoinWeight(Query joinQuery, Weight childWeight, Filter parentsFilter, ScoreMode scoreMode) {
-      super();
-      this.joinQuery = joinQuery;
-      this.childWeight = childWeight;
-      this.parentsFilter = parentsFilter;
+      super(joinQuery, childWeight, parentsFilter);
       this.scoreMode = scoreMode;
-    }
-
-    @Override
-    public Query getQuery() {
-      return joinQuery;
-    }
-
-    @Override
-    public float getValueForNormalization() throws IOException {
-      return childWeight.getValueForNormalization() * joinQuery.getBoost() * joinQuery.getBoost();
-    }
-
-    @Override
-    public void normalize(float norm, float topLevelBoost) {
-      childWeight.normalize(norm, topLevelBoost * joinQuery.getBoost());
     }
 
     // NOTE: acceptDocs applies (and is checked) only in the
@@ -210,32 +174,18 @@ public class ToParentBlockJoinQuery extends Query {
     }
   }
 
-  static class BlockJoinScorer extends Scorer {
-    private final Scorer childScorer;
-    private final FixedBitSet parentBits;
+  static class BlockJoinScorer extends TraversableBlockJoinScorer {
     private final ScoreMode scoreMode;
-    private final Bits acceptDocs;
-    private int parentDoc = -1;
-    private int prevParentDoc;
-    private float parentScore;
-    private int parentFreq;
-    private int nextChildDoc;
-
     private int[] pendingChildDocs = new int[5];
     private float[] pendingChildScores;
     private int childDocUpto;
 
     public BlockJoinScorer(Weight weight, Scorer childScorer, FixedBitSet parentBits, int firstChildDoc, ScoreMode scoreMode, Bits acceptDocs) {
-      super(weight);
-      //System.out.println("Q.init firstChildDoc=" + firstChildDoc);
-      this.parentBits = parentBits;
-      this.childScorer = childScorer;
+      super(weight, childScorer, parentBits, firstChildDoc, acceptDocs);
       this.scoreMode = scoreMode;
-      this.acceptDocs = acceptDocs;
       if (scoreMode != ScoreMode.None) {
         pendingChildScores = new float[5];
       }
-      nextChildDoc = firstChildDoc;
     }
 
     @Override
@@ -293,9 +243,7 @@ public class ToParentBlockJoinQuery extends Query {
         if (acceptDocs != null && !acceptDocs.get(parentDoc)) {
           // Parent doc not accepted; skip child docs until
           // we hit a new parent doc:
-          do {
-            nextChildDoc = childScorer.nextDoc();
-          } while (nextChildDoc < parentDoc);
+          while(super.nextChild() != NO_MORE_CHILDREN);
           continue;
         }
 
@@ -324,8 +272,7 @@ public class ToParentBlockJoinQuery extends Query {
             parentFreq += childFreq;
           }
           childDocUpto++;
-          nextChildDoc = childScorer.nextDoc();
-        } while (nextChildDoc < parentDoc);
+        } while (super.nextChild() != NO_MORE_CHILDREN);
 
         // Parent & child docs are supposed to be orthogonal:
         assert nextChildDoc != parentDoc;
@@ -357,6 +304,11 @@ public class ToParentBlockJoinQuery extends Query {
     @Override
     public float score() throws IOException {
       return parentScore;
+    }
+    
+    @Override
+    public int nextChild() throws IOException {
+      throw new UnsupportedOperationException("ToParentBlockJoinQuery " + this + " does not implement nextChild()");
     }
     
     @Override

@@ -31,6 +31,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.lucene.document.Document;
+import org.apache.lucene.index.IndexDocument;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.Term;
@@ -71,6 +72,7 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
 
   // stats
   AtomicLong addCommands = new AtomicLong();
+  AtomicLong addBlockCommands = new AtomicLong();
   AtomicLong addCommandsCumulative = new AtomicLong();
   AtomicLong deleteByIdCommands= new AtomicLong();
   AtomicLong deleteByIdCommandsCumulative= new AtomicLong();
@@ -256,6 +258,52 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
     }
     
     return rc;
+  }
+  
+  @Override
+  public int addBlock(final AddBlockUpdateCommand cmd) throws IOException {
+    RefCounted<IndexWriter> iw = solrCoreState.getIndexWriter(core);
+    final int rc[] = {0};
+    try {
+      IndexWriter writer = iw.get();
+      addBlockCommands.incrementAndGet();
+      try {
+        // allow duplicates
+        // block
+        final Iterable<IndexDocument> wrapper = new WrappingIterable<IndexDocument>(cmd) {
+          @Override
+          protected void onElem(IndexDocument next) {
+            rc[0]++;
+          }
+        };
+        
+        writer.addDocuments(wrapper, schema.getAnalyzer());
+
+        // TODO add into ulog
+        if ((cmd.getFlags() & UpdateCommand.IGNORE_AUTOCOMMIT) == 0) {
+          commitTracker.addedDocument(-1);
+          softCommitTracker.addedDocument(cmd.commitWithin);
+        }
+      } catch (Exception e) {
+        numErrors.incrementAndGet();
+        numErrorsCumulative.incrementAndGet();
+        if (e instanceof IOException) {
+          throw (IOException) e;
+        } else {
+          throw new RuntimeException(e);
+        }
+      } finally {
+        if (rc[0] > 0) {
+          long curr;
+          do {
+            curr = numDocsPending.get();
+          } while (!numDocsPending.compareAndSet(curr, curr + rc[0]));
+        }
+      }
+    } finally {
+      iw.decref();
+    }
+    return rc[0];
   }
   
   private void updateDeleteTrackers(DeleteUpdateCommand cmd) {
