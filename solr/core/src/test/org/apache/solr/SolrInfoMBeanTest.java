@@ -24,6 +24,8 @@ import org.apache.solr.handler.component.SearchHandler;
 import org.apache.solr.highlight.DefaultSolrHighlighter;
 import org.apache.solr.search.LRUCache;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
+
 import java.io.File;
 import java.net.URI;
 import java.net.URL;
@@ -45,6 +47,7 @@ public class SolrInfoMBeanTest extends SolrTestCaseJ4
    * Gets a list of everything we can find in the classpath and makes sure it has
    * a name, description, etc...
    */
+  @Ignore
   public void testCallMBeanInfo() throws Exception {
     List<Class> classes = new ArrayList<Class>();
     classes.addAll(getClassesForPackage(StandardRequestHandler.class.getPackage().getName()));
