@@ -1076,15 +1076,21 @@ public class TestBlockJoin extends LuceneTestCase {
 
     // Add another docs so scorer is not null
     List<List<Document>> docs = new ArrayList<List<Document>>();
-    for (int i = 2; i < 6; ++i) {
+    parentDoc = new Document();
+    parentDoc.add(newStringField("parent", "2", Field.Store.NO));
+    parentDoc.add(newStringField("isparent", "yes", Field.Store.NO));
+    Document childDoc = new Document();
+    childDoc.add(newStringField("child", "2", Field.Store.NO));
+    docs.add(Arrays.asList(childDoc, parentDoc));
+    for (int i = 3; i < 8; ++i) {
       parentDoc = new Document();
-      parentDoc.add(newStringField("parent", Integer.toString(i), Field.Store.YES));
-      parentDoc.add(newStringField("isparent", "yes", Field.Store.YES));
-      Document childDoc = new Document();
+      parentDoc.add(newStringField("parent", Integer.toString(i), Field.Store.NO));
+      parentDoc.add(newStringField("isparent", "yes", Field.Store.NO));
+      childDoc = new Document();
       if (random().nextBoolean()) {
-        childDoc.add(newStringField("child", "2", Field.Store.YES));
+        childDoc.add(newStringField("child", "2", Field.Store.NO));
       } else {
-        childDoc.add(newStringField("child", "1", Field.Store.YES));
+        childDoc.add(newStringField("child", "1", Field.Store.NO));
       }
       docs.add(Arrays.asList(childDoc, parentDoc));
     }
@@ -1107,7 +1113,7 @@ public class TestBlockJoin extends LuceneTestCase {
     Weight weight = s.createNormalizedWeight(q);
     TraversableBlockJoinScorer traversableScorer = (TraversableBlockJoinScorer) weight.scorer(s.getIndexReader().leaves().get(0), true, true, null);
 
-    traversableScorer.advance(random().nextInt(9));
+    traversableScorer.advance(random().nextInt(13));
     assertTrue(traversableScorer.nextChildDoc + 1 == traversableScorer.docID() ||
                (traversableScorer.nextChildDoc == DocIdSetIterator.NO_MORE_DOCS && traversableScorer.docID() == DocIdSetIterator.NO_MORE_DOCS));
 
@@ -1129,6 +1135,7 @@ public class TestBlockJoin extends LuceneTestCase {
     final List<Document> docs2 = new ArrayList<Document>();
     docs2.add(makeJob("ruby", 2005));
     docs2.add(makeJob("java", 2006));
+    docs2.add(makeJob("java", 2010));
     Collections.shuffle(docs2, random());
     docs2.add(makeResume("Frank", "United States"));
 
@@ -1154,9 +1161,6 @@ public class TestBlockJoin extends LuceneTestCase {
     childQuery.add(new BooleanClause(new TermQuery(new Term("skill", "java")), Occur.MUST));
     childQuery.add(new BooleanClause(NumericRangeQuery.newIntRange("year", 2006, 2011, true, true), Occur.MUST));
 
-    // Define parent document criteria (find a resident in the UK)
-    Query parentQuery = new TermQuery(new Term("country", "United Kingdom"));
-
     // Wrap the child document query to 'join' any matches
     // up to corresponding parent:
     TraversableToParentBlockJoinQuery childJoinQuery = new TraversableToParentBlockJoinQuery(childQuery, parentsFilter);
@@ -1171,7 +1175,7 @@ public class TestBlockJoin extends LuceneTestCase {
       } while (traversableScorer.nextChild() != TraversableBlockJoinScorer.NO_MORE_CHILDREN);
     }
 
-    assertEquals(2, childDocs.size());
+    assertEquals(3, childDocs.size());
     for (Integer childDoc : childDocs) {
       assertEquals("java", r.document(childDoc).get("skill"));
       int year = Integer.parseInt(r.document(childDoc).get("year"));
