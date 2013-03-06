@@ -1254,4 +1254,106 @@ public class TestBlockJoin extends LuceneTestCase {
     r.close();
     dir.close();
   }
+
+  public void testGetTopGroupsWithAllChildDocs() throws Exception {
+
+    final Directory dir = newDirectory();
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+
+    final List<Document> docs = new ArrayList<Document>();
+    docs.add(makeJob("java", 2007));
+    docs.add(makeJob("python", 2010));
+    Collections.shuffle(docs, random());
+    docs.add(makeResume("Lisa", "United Kingdom"));
+
+    final List<Document> docs2 = new ArrayList<Document>();
+    docs2.add(makeJob("ruby", 2005));
+    docs2.add(makeJob("java", 2006));
+    docs2.add(makeJob("java", 2010));
+    Collections.shuffle(docs2, random());
+    docs2.add(makeResume("Frank", "United States"));
+
+    addSkillless(w);
+    boolean turn = random().nextBoolean();
+    w.addDocuments(turn ? docs:docs2);
+
+    addSkillless(w);
+
+    w.addDocuments(!turn ? docs:docs2);
+
+    addSkillless(w);
+
+    IndexReader r = w.getReader();
+    w.close();
+    IndexSearcher s = newSearcher(r);
+
+    // Create a filter that defines "parent" documents in the index - in this case resumes
+    Filter parentsFilter = new CachingWrapperFilter(new QueryWrapperFilter(new TermQuery(new Term("docType", "resume"))));
+
+    // Define child document criteria (finds an example of relevant work experience)
+    BooleanQuery childQuery = new BooleanQuery();
+    childQuery.add(new BooleanClause(new TermQuery(new Term("skill", "java")), Occur.MUST));
+    childQuery.add(new BooleanClause(NumericRangeQuery.newIntRange("year", 2006, 2011, true, true), Occur.MUST));
+
+    // Wrap the child document query to 'join' any matches
+    // up to corresponding parent:
+    ToParentBlockJoinQuery childJoinQuery = new ToParentBlockJoinQuery(childQuery, parentsFilter, ScoreMode.Avg);
+
+    ToParentBlockJoinCollector c = new ToParentBlockJoinCollector(Sort.RELEVANCE, 2, true, true);
+
+    s.search(childJoinQuery, c);
+
+    TopGroups<Integer> results = c.getTopGroupsWithAllChildDocs(childJoinQuery, null, 0, 0, true);
+
+    assertFalse(Float.isNaN(results.maxScore));
+    assertEquals(3, results.totalGroupedHitCount);
+    assertEquals(2, results.groups.length);
+
+    int franksGroupIndex;
+
+    final GroupDocs<Integer> group = results.groups[0];
+    assertNotNull(group.groupValue);
+    StoredDocument parentDoc = s.doc(group.groupValue);
+    if ("Frank".equals(parentDoc.get("name"))) {
+      franksGroupIndex = 0;
+    } else {
+      franksGroupIndex = 1;
+    }
+
+    //Asserts regarding Frank's group docs
+    final GroupDocs<Integer> frankGroup = results.groups[franksGroupIndex];
+    assertEquals(2, frankGroup.totalHits);
+    assertFalse(Float.isNaN(frankGroup.score));
+    assertNotNull(frankGroup.groupValue);
+    parentDoc = s.doc(frankGroup.groupValue);
+    assertEquals("Frank", parentDoc.get("name"));
+
+    assertEquals(2, frankGroup.scoreDocs.length);
+    for (ScoreDoc scoreDoc : frankGroup.scoreDocs) {
+      StoredDocument childDoc = s.doc(scoreDoc.doc);
+      assertEquals("java", childDoc.get("skill"));
+      int year = Integer.parseInt(childDoc.get("year"));
+      assertTrue(year >= 2006 && year <= 2011);
+    }
+
+
+    //Asserts regarding Lisa's group docs
+    final GroupDocs<Integer> lisaGroup = results.groups[1 - franksGroupIndex];
+    assertEquals(1, lisaGroup.totalHits);
+    assertFalse(Float.isNaN(lisaGroup.score));
+    assertNotNull(lisaGroup.groupValue);
+    parentDoc = s.doc(lisaGroup.groupValue);
+    assertEquals("Lisa", parentDoc.get("name"));
+
+    assertEquals(1, lisaGroup.scoreDocs.length);
+    ScoreDoc scoreDoc = lisaGroup.scoreDocs[0];
+    StoredDocument childDoc = s.doc(scoreDoc.doc);
+    assertEquals("java", childDoc.get("skill"));
+    int year = Integer.parseInt(childDoc.get("year"));
+    assertTrue(year >= 2006 && year <= 2011);
+
+
+    r.close();
+    dir.close();
+  }
 }
