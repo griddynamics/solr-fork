@@ -456,15 +456,11 @@ public class ToParentBlockJoinCollector extends Collector {
                                   totalHitCount);
   }
 
-  /** Return the TopGroups for the specified
-   *   BlockJoinQuery.  The groupValue of each GroupDocs will
-   *  be the parent docID for that group. Returns null if
-   *  no groups matched.
-   *
-   *  The only difference from
-   *  {@link ToParentBlockJoinCollector#getTopGroups(ToParentBlockJoinQuery, org.apache.lucene.search.Sort, int, int, int, boolean)}
-   *  is that the number of documents within each group isn't bounded by passed arguments and
+  /** Return the TopGroups for the specified BlockJoinQuery.
+   *  The groupValue of each GroupDocs will be the parent docID for that group.
+   *  The number of documents within each group
    *  equals to the total number of child documents matching parent for that group.
+   *  Returns null if no groups matched.
    *
    * @param query Search query
    * @param withinGroupSort Sort criteria within groups
