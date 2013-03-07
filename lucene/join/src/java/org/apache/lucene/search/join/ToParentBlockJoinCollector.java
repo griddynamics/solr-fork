@@ -366,7 +366,8 @@ public class ToParentBlockJoinCollector extends Collector {
    *  is not computed (will always be 0).  Returns null if
    *  no groups matched. */
   @SuppressWarnings("unchecked")
-  public TopGroups<Integer> getTopGroups(ToParentBlockJoinQuery query, Sort withinGroupSort, int offset, int maxDocsPerGroup, int withinGroupOffset, boolean fillSortFields)
+  public TopGroups<Integer> getTopGroups(ToParentBlockJoinQuery query, Sort withinGroupSort, int offset,
+                                         int maxDocsPerGroup, int withinGroupOffset, boolean fillSortFields)
 
     throws IOException {
 
@@ -471,7 +472,8 @@ public class ToParentBlockJoinCollector extends Collector {
    * @throws IOException if there is a low-level I/O error
    */
   @SuppressWarnings("unchecked")
-  public TopGroups<Integer> getTopGroupsWithAllChildDocs(ToParentBlockJoinQuery query, Sort withinGroupSort, int offset, int withinGroupOffset, boolean fillSortFields)
+  public TopGroups<Integer> getTopGroupsWithAllChildDocs(ToParentBlockJoinQuery query, Sort withinGroupSort, int offset,
+                                                         int withinGroupOffset, boolean fillSortFields)
     throws IOException {
 
     return getTopGroups(query, withinGroupSort, offset, -1, withinGroupOffset, fillSortFields);
