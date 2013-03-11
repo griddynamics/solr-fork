@@ -1255,32 +1255,21 @@ public class TestBlockJoin extends LuceneTestCase {
     dir.close();
   }
 
-  public void testGetTopGroupsWithAllChildDocs() throws Exception {
+  public void testGetTopGroups() throws Exception {
 
     final Directory dir = newDirectory();
     final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
-
-    final List<Document> docs = new ArrayList<Document>();
-    docs.add(makeJob("java", 2007));
-    docs.add(makeJob("python", 2010));
-    Collections.shuffle(docs, random());
-    docs.add(makeResume("Lisa", "United Kingdom"));
 
     final List<Document> docs2 = new ArrayList<Document>();
     docs2.add(makeJob("ruby", 2005));
     docs2.add(makeJob("java", 2006));
     docs2.add(makeJob("java", 2010));
+    docs2.add(makeJob("java", 2012));
     Collections.shuffle(docs2, random());
     docs2.add(makeResume("Frank", "United States"));
 
     addSkillless(w);
-    boolean turn = random().nextBoolean();
-    w.addDocuments(turn ? docs:docs2);
-
-    addSkillless(w);
-
-    w.addDocuments(!turn ? docs:docs2);
-
+    w.addDocuments(docs2);
     addSkillless(w);
 
     IndexReader r = w.getReader();
@@ -1303,55 +1292,55 @@ public class TestBlockJoin extends LuceneTestCase {
 
     s.search(childJoinQuery, c);
 
-    TopGroups<Integer> results = c.getTopGroupsWithAllChildDocs(childJoinQuery, null, 0, 0, true);
+    //Get all child documents within groups
+    @SuppressWarnings({"unchecked","rawtypes"})
+    TopGroups<Integer>[] getTopGroupsResults = new TopGroups[2];
+    getTopGroupsResults[0] = c.getTopGroups(childJoinQuery, null, 0, 10, 0, true);
+    getTopGroupsResults[1] = c.getTopGroupsWithAllChildDocs(childJoinQuery, null, 0, 0, true);
 
-    assertFalse(Float.isNaN(results.maxScore));
-    assertEquals(3, results.totalGroupedHitCount);
-    assertEquals(2, results.groups.length);
+    for (TopGroups<Integer> results : getTopGroupsResults) {
+      assertFalse(Float.isNaN(results.maxScore));
+      assertEquals(2, results.totalGroupedHitCount);
+      assertEquals(1, results.groups.length);
 
-    int franksGroupIndex;
+      final GroupDocs<Integer> group = results.groups[0];
+      assertEquals(2, group.totalHits);
+      assertFalse(Float.isNaN(group.score));
+      assertNotNull(group.groupValue);
+      StoredDocument parentDoc = s.doc(group.groupValue);
+      assertEquals("Frank", parentDoc.get("name"));
 
-    final GroupDocs<Integer> group = results.groups[0];
-    assertNotNull(group.groupValue);
-    StoredDocument parentDoc = s.doc(group.groupValue);
-    if ("Frank".equals(parentDoc.get("name"))) {
-      franksGroupIndex = 0;
-    } else {
-      franksGroupIndex = 1;
+      assertEquals(2, group.scoreDocs.length); //all matched child documents collected
+
+      for (ScoreDoc scoreDoc : group.scoreDocs) {
+        StoredDocument childDoc = s.doc(scoreDoc.doc);
+        assertEquals("java", childDoc.get("skill"));
+        int year = Integer.parseInt(childDoc.get("year"));
+        assertTrue(year >= 2006 && year <= 2011);
+      }
     }
 
-    //Asserts regarding Frank's group docs
-    final GroupDocs<Integer> frankGroup = results.groups[franksGroupIndex];
-    assertEquals(2, frankGroup.totalHits);
-    assertFalse(Float.isNaN(frankGroup.score));
-    assertNotNull(frankGroup.groupValue);
-    parentDoc = s.doc(frankGroup.groupValue);
+    //Get part of child documents
+    TopGroups<Integer> boundedResults = c.getTopGroups(childJoinQuery, null, 0, 1, 0, true);
+    assertFalse(Float.isNaN(boundedResults.maxScore));
+    assertEquals(2, boundedResults.totalGroupedHitCount);
+    assertEquals(1, boundedResults.groups.length);
+
+    final GroupDocs<Integer> group = boundedResults.groups[0];
+    assertEquals(2, group.totalHits);
+    assertFalse(Float.isNaN(group.score));
+    assertNotNull(group.groupValue);
+    StoredDocument parentDoc = s.doc(group.groupValue);
     assertEquals("Frank", parentDoc.get("name"));
 
-    assertEquals(2, frankGroup.scoreDocs.length);
-    for (ScoreDoc scoreDoc : frankGroup.scoreDocs) {
+    assertEquals(1, group.scoreDocs.length); //not all matched child documents collected
+
+    for (ScoreDoc scoreDoc : group.scoreDocs) {
       StoredDocument childDoc = s.doc(scoreDoc.doc);
       assertEquals("java", childDoc.get("skill"));
       int year = Integer.parseInt(childDoc.get("year"));
       assertTrue(year >= 2006 && year <= 2011);
     }
-
-
-    //Asserts regarding Lisa's group docs
-    final GroupDocs<Integer> lisaGroup = results.groups[1 - franksGroupIndex];
-    assertEquals(1, lisaGroup.totalHits);
-    assertFalse(Float.isNaN(lisaGroup.score));
-    assertNotNull(lisaGroup.groupValue);
-    parentDoc = s.doc(lisaGroup.groupValue);
-    assertEquals("Lisa", parentDoc.get("name"));
-
-    assertEquals(1, lisaGroup.scoreDocs.length);
-    ScoreDoc scoreDoc = lisaGroup.scoreDocs[0];
-    StoredDocument childDoc = s.doc(scoreDoc.doc);
-    assertEquals("java", childDoc.get("skill"));
-    int year = Integer.parseInt(childDoc.get("year"));
-    assertTrue(year >= 2006 && year <= 2011);
-
 
     r.close();
     dir.close();

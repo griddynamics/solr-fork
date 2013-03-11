@@ -401,19 +401,18 @@ public class ToParentBlockJoinCollector extends Collector {
       return null;
     }
 
-    final FakeScorer fakeScorer = new FakeScorer();
-    final GetTopGroupsContext context = new GetTopGroupsContext(slot, offset, maxDocsPerGroup, withinGroupOffset,
-                                                                withinGroupSort, fillSortFields, fakeScorer);
+    final GroupDocsAccumulator groupDocsAccumulator = new GroupDocsAccumulator(slot, offset, maxDocsPerGroup, withinGroupOffset,
+                                                                withinGroupSort, fillSortFields);
 
-    collectGroupDocs(context);
+    groupDocsAccumulator.accumulate();
 
     return new TopGroups<Integer>(new TopGroups<Integer>(sort.getSort(),
                                                          withinGroupSort == null ? null : withinGroupSort.getSort(),
-                                                         0, context.totalGroupedHitCount, context.groups, maxScore),
+                                                         0, groupDocsAccumulator.totalGroupedHitCount, groupDocsAccumulator.groups, maxScore),
                                   totalHitCount);
   }
 
-  private final class GetTopGroupsContext {
+  private final class GroupDocsAccumulator {
     final int slot;
     final int offset;
     final int maxDocsPerGroup;
@@ -421,75 +420,74 @@ public class ToParentBlockJoinCollector extends Collector {
     final Sort withinGroupSort;
     final boolean fillSortFields;
     final FakeScorer fakeScorer;
-
-    int totalGroupedHitCount = 0;
     final GroupDocs<Integer>[] groups;
 
+    int totalGroupedHitCount = 0;
+
     @SuppressWarnings({"unchecked","rawtypes"})
-    public GetTopGroupsContext(int slot, int offset, int maxDocsPerGroup, int withinGroupOffset, Sort withinGroupSort, boolean fillSortFields,
-                                          FakeScorer fakeScorer) {
+    public GroupDocsAccumulator(int slot, int offset, int maxDocsPerGroup, int withinGroupOffset, Sort withinGroupSort, boolean fillSortFields) {
       this.slot = slot;
       this.offset = offset;
       this.maxDocsPerGroup = maxDocsPerGroup;
       this.withinGroupOffset = withinGroupOffset;
       this.withinGroupSort = withinGroupSort;
       this.fillSortFields = fillSortFields;
-      this.fakeScorer = fakeScorer;
+      this.fakeScorer = new FakeScorer();
       this.groups = new GroupDocs[sortedGroups.length - offset];
     }
-  }
 
-  private void collectGroupDocs(GetTopGroupsContext context) throws IOException {
-    for(int groupIDX=context.offset;groupIDX<sortedGroups.length;groupIDX++) {
-      final OneGroup og = sortedGroups[groupIDX];
-      final int numChildDocs = og.counts[context.slot];
-      final int numDocsInGroup = context.maxDocsPerGroup < 0 ? numChildDocs : context.maxDocsPerGroup;
+    public void accumulate() throws IOException {
+      for(int groupIDX=offset;groupIDX<sortedGroups.length;groupIDX++) {
+        final OneGroup og = sortedGroups[groupIDX];
+        final int numChildDocs = og.counts[slot];
+        final int numDocsInGroup = maxDocsPerGroup < 0 ? numChildDocs : maxDocsPerGroup;
 
-      // At this point we hold all docs w/ in each group,
-      // unsorted; we now sort them:
-      final TopDocsCollector<?> collector;
-      if (context.withinGroupSort == null) {
-        // Sort by score
-        if (!trackScores) {
-          throw new IllegalArgumentException("cannot sort by relevance within group: trackScores=false");
+        // At this point we hold all docs w/ in each group,
+        // unsorted; we now sort them:
+        final TopDocsCollector<?> collector;
+        if (withinGroupSort == null) {
+          // Sort by score
+          if (!trackScores) {
+            throw new IllegalArgumentException("cannot sort by relevance within group: trackScores=false");
+          }
+          collector = TopScoreDocCollector.create(numDocsInGroup, true);
+        } else {
+          // Sort by fields
+          collector = TopFieldCollector.create(withinGroupSort, numDocsInGroup, fillSortFields, trackScores, trackMaxScore, true);
         }
-        collector = TopScoreDocCollector.create(numDocsInGroup, true);
-      } else {
-        // Sort by fields
-        collector = TopFieldCollector.create(context.withinGroupSort, numDocsInGroup, context.fillSortFields, trackScores, trackMaxScore, true);
-      }
 
-      collector.setScorer(context.fakeScorer);
-      collector.setNextReader(og.readerContext);
-      for(int docIDX=0;docIDX<numChildDocs;docIDX++) {
-        final int doc = og.docs[context.slot][docIDX];
-        context.fakeScorer.doc = doc;
-        if (trackScores) {
-          context.fakeScorer.score = og.scores[context.slot][docIDX];
+        collector.setScorer(fakeScorer);
+        collector.setNextReader(og.readerContext);
+        for(int docIDX=0;docIDX<numChildDocs;docIDX++) {
+          final int doc = og.docs[slot][docIDX];
+          fakeScorer.doc = doc;
+          if (trackScores) {
+            fakeScorer.score = og.scores[slot][docIDX];
+          }
+          collector.collect(doc);
         }
-        collector.collect(doc);
-      }
-      context.totalGroupedHitCount += numChildDocs;
+        totalGroupedHitCount += numChildDocs;
 
-      final Object[] groupSortValues;
+        final Object[] groupSortValues;
 
-      if (context.fillSortFields) {
-        groupSortValues = new Object[comparators.length];
-        for(int sortFieldIDX=0;sortFieldIDX<comparators.length;sortFieldIDX++) {
-          groupSortValues[sortFieldIDX] = comparators[sortFieldIDX].value(og.slot);
+        if (fillSortFields) {
+          groupSortValues = new Object[comparators.length];
+          for(int sortFieldIDX=0;sortFieldIDX<comparators.length;sortFieldIDX++) {
+            groupSortValues[sortFieldIDX] = comparators[sortFieldIDX].value(og.slot);
+          }
+        } else {
+          groupSortValues = null;
         }
-      } else {
-        groupSortValues = null;
+
+        final TopDocs topDocs = collector.topDocs(withinGroupOffset, numDocsInGroup);
+
+        groups[groupIDX-offset] = new GroupDocs<Integer>(og.score,
+                                                         topDocs.getMaxScore(),
+                                                         numChildDocs,
+                                                         topDocs.scoreDocs,
+                                                         og.doc,
+                                                         groupSortValues);
       }
-
-      final TopDocs topDocs = collector.topDocs(context.withinGroupOffset, numDocsInGroup);
-
-      context.groups[groupIDX-context.offset] = new GroupDocs<Integer>(og.score,
-                                                       topDocs.getMaxScore(),
-                                                       numChildDocs,
-                                                       topDocs.scoreDocs,
-                                                       og.doc,
-                                                       groupSortValues);
     }
   }
 
