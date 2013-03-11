@@ -360,11 +360,20 @@ public class ToParentBlockJoinCollector extends Collector {
 
   /** Return the TopGroups for the specified
    *  BlockJoinQuery.  The groupValue of each GroupDocs will
-   *  be the parent docID for that group.  Note that the
-   *  {@link GroupDocs#totalHits}, which would be the
-   *  total number of child documents matching that parent,
-   *  is not computed (will always be 0).  Returns null if
-   *  no groups matched. */
+   *  be the parent docID for that group.
+   *  The number of documents within each group is bounded by <code>maxDocsPerGroup</code>
+   *  in case of <code>maxDocsPerGroup</code> is not negative; otherwise all child documents will be collected.
+   *  Returns null if no groups matched.
+   *
+   * @param query Search query
+   * @param withinGroupSort Sort criteria within groups
+   * @param offset Parent docs offset
+   * @param maxDocsPerGroup Upper bound of documents per group number. If it's negative all child docs will be collected
+   * @param withinGroupOffset Offset within each group of child docs
+   * @param fillSortFields Specifies whether to add sort fields or not
+   * @return TopGroups for specified query
+   * @throws IOException if there is a low-level I/O error
+   */
   @SuppressWarnings("unchecked")
   public TopGroups<Integer> getTopGroups(ToParentBlockJoinQuery query, Sort withinGroupSort, int offset,
                                          int maxDocsPerGroup, int withinGroupOffset, boolean fillSortFields)
@@ -392,22 +401,54 @@ public class ToParentBlockJoinCollector extends Collector {
       return null;
     }
 
-    int totalGroupedHitCount = 0;
-
     final FakeScorer fakeScorer = new FakeScorer();
+    final GetTopGroupsContext context = new GetTopGroupsContext(slot, offset, maxDocsPerGroup, withinGroupOffset,
+                                                                withinGroupSort, fillSortFields, fakeScorer);
+
+    collectGroupDocs(context);
+
+    return new TopGroups<Integer>(new TopGroups<Integer>(sort.getSort(),
+                                                         withinGroupSort == null ? null : withinGroupSort.getSort(),
+                                                         0, context.totalGroupedHitCount, context.groups, maxScore),
+                                  totalHitCount);
+  }
+
+  private final class GetTopGroupsContext {
+    final int slot;
+    final int offset;
+    final int maxDocsPerGroup;
+    final int withinGroupOffset;
+    final Sort withinGroupSort;
+    final boolean fillSortFields;
+    final FakeScorer fakeScorer;
+
+    int totalGroupedHitCount = 0;
+    final GroupDocs<Integer>[] groups;
 
     @SuppressWarnings({"unchecked","rawtypes"})
-    final GroupDocs<Integer>[] groups = new GroupDocs[sortedGroups.length - offset];
+    public GetTopGroupsContext(int slot, int offset, int maxDocsPerGroup, int withinGroupOffset, Sort withinGroupSort, boolean fillSortFields,
+                                          FakeScorer fakeScorer) {
+      this.slot = slot;
+      this.offset = offset;
+      this.maxDocsPerGroup = maxDocsPerGroup;
+      this.withinGroupOffset = withinGroupOffset;
+      this.withinGroupSort = withinGroupSort;
+      this.fillSortFields = fillSortFields;
+      this.fakeScorer = fakeScorer;
+      this.groups = new GroupDocs[sortedGroups.length - offset];
+    }
+  }
 
-    for(int groupIDX=offset;groupIDX<sortedGroups.length;groupIDX++) {
+  private void collectGroupDocs(GetTopGroupsContext context) throws IOException {
+    for(int groupIDX=context.offset;groupIDX<sortedGroups.length;groupIDX++) {
       final OneGroup og = sortedGroups[groupIDX];
-      final int numChildDocs = og.counts[slot];
-      final int numDocsInGroup = maxDocsPerGroup < 0 ? numChildDocs : maxDocsPerGroup;
+      final int numChildDocs = og.counts[context.slot];
+      final int numDocsInGroup = context.maxDocsPerGroup < 0 ? numChildDocs : context.maxDocsPerGroup;
 
       // At this point we hold all docs w/ in each group,
       // unsorted; we now sort them:
       final TopDocsCollector<?> collector;
-      if (withinGroupSort == null) {
+      if (context.withinGroupSort == null) {
         // Sort by score
         if (!trackScores) {
           throw new IllegalArgumentException("cannot sort by relevance within group: trackScores=false");
@@ -415,24 +456,24 @@ public class ToParentBlockJoinCollector extends Collector {
         collector = TopScoreDocCollector.create(numDocsInGroup, true);
       } else {
         // Sort by fields
-        collector = TopFieldCollector.create(withinGroupSort, numDocsInGroup, fillSortFields, trackScores, trackMaxScore, true);
+        collector = TopFieldCollector.create(context.withinGroupSort, numDocsInGroup, context.fillSortFields, trackScores, trackMaxScore, true);
       }
 
-      collector.setScorer(fakeScorer);
+      collector.setScorer(context.fakeScorer);
       collector.setNextReader(og.readerContext);
       for(int docIDX=0;docIDX<numChildDocs;docIDX++) {
-        final int doc = og.docs[slot][docIDX];
-        fakeScorer.doc = doc;
+        final int doc = og.docs[context.slot][docIDX];
+        context.fakeScorer.doc = doc;
         if (trackScores) {
-          fakeScorer.score = og.scores[slot][docIDX];
+          context.fakeScorer.score = og.scores[context.slot][docIDX];
         }
         collector.collect(doc);
       }
-      totalGroupedHitCount += numChildDocs;
+      context.totalGroupedHitCount += numChildDocs;
 
       final Object[] groupSortValues;
 
-      if (fillSortFields) {
+      if (context.fillSortFields) {
         groupSortValues = new Object[comparators.length];
         for(int sortFieldIDX=0;sortFieldIDX<comparators.length;sortFieldIDX++) {
           groupSortValues[sortFieldIDX] = comparators[sortFieldIDX].value(og.slot);
@@ -441,20 +482,15 @@ public class ToParentBlockJoinCollector extends Collector {
         groupSortValues = null;
       }
 
-      final TopDocs topDocs = collector.topDocs(withinGroupOffset, numDocsInGroup);
+      final TopDocs topDocs = collector.topDocs(context.withinGroupOffset, numDocsInGroup);
 
-      groups[groupIDX-offset] = new GroupDocs<Integer>(og.score,
+      context.groups[groupIDX-context.offset] = new GroupDocs<Integer>(og.score,
                                                        topDocs.getMaxScore(),
                                                        numChildDocs,
                                                        topDocs.scoreDocs,
                                                        og.doc,
                                                        groupSortValues);
     }
-
-    return new TopGroups<Integer>(new TopGroups<Integer>(sort.getSort(),
-                                                         withinGroupSort == null ? null : withinGroupSort.getSort(),
-                                                         0, totalGroupedHitCount, groups, maxScore),
-                                  totalHitCount);
   }
 
   /** Return the TopGroups for the specified BlockJoinQuery.
