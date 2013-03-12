@@ -1260,16 +1260,16 @@ public class TestBlockJoin extends LuceneTestCase {
     final Directory dir = newDirectory();
     final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
 
-    final List<Document> docs2 = new ArrayList<Document>();
-    docs2.add(makeJob("ruby", 2005));
-    docs2.add(makeJob("java", 2006));
-    docs2.add(makeJob("java", 2010));
-    docs2.add(makeJob("java", 2012));
-    Collections.shuffle(docs2, random());
-    docs2.add(makeResume("Frank", "United States"));
+    final List<Document> docs = new ArrayList<Document>();
+    docs.add(makeJob("ruby", 2005));
+    docs.add(makeJob("java", 2006));
+    docs.add(makeJob("java", 2010));
+    docs.add(makeJob("java", 2012));
+    Collections.shuffle(docs, random());
+    docs.add(makeResume("Frank", "United States"));
 
     addSkillless(w);
-    w.addDocuments(docs2);
+    w.addDocuments(docs);
     addSkillless(w);
 
     IndexReader r = w.getReader();
