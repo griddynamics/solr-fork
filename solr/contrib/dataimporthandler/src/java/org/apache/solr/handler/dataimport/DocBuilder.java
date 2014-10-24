@@ -417,7 +417,7 @@ public class DocBuilder {
   }
 
   @SuppressWarnings("unchecked")
-  private void buildDocument(VariableResolver vr, DocWrapper doc,
+  private void buildDocument(VariableResolver vr, DocWrapper parentDoc,
                              Map<String, Object> pk, EntityProcessorWrapper epw, boolean isRoot,
                              ContextImpl parentCtx, List<EntityProcessorWrapper> entitiesToDestroy) {
 
@@ -455,12 +455,12 @@ public class DocBuilder {
           if (verboseDebug && epw.getEntity().isDocRoot()) {
             getDebugLogger().log(DIHLogLevels.START_DOC, epw.getEntity().getName(), null);
           }
-          if (doc == null && epw.getEntity().isDocRoot()) {
-            doc = new DocWrapper();
-            ctx.setDoc(doc);
+          if (parentDoc == null && epw.getEntity().isDocRoot()) {
+            parentDoc = new DocWrapper();
+            ctx.setDoc(parentDoc);
             Entity e = epw.getEntity();
             while (e.getParentEntity() != null) {
-              addFields(e.getParentEntity(), doc, (Map<String, Object>) vr
+              addFields(e.getParentEntity(), parentDoc, (Map<String, Object>) vr
                       .resolve(e.getParentEntity().getName()), vr);
               e = e.getParentEntity();
             }
@@ -485,27 +485,41 @@ public class DocBuilder {
             getDebugLogger().log(DIHLogLevels.ENTITY_OUT, epw.getEntity().getName(), arow);
           }
           importStatistics.rowsCount.incrementAndGet();
-          if (doc != null) {
-            handleSpecialCommands(arow, doc);
-            addFields(epw.getEntity(), doc, arow, vr);
+          
+          DocWrapper childDoc = null;
+          if (parentDoc != null) {
+            if (epw.getEntity().isChild()) {
+              childDoc = new DocWrapper();
+              handleSpecialCommands(arow, childDoc);
+              addFields(epw.getEntity(), childDoc, arow, vr);
+              parentDoc.addChildDocument(childDoc);
+            } else {
+              handleSpecialCommands(arow, parentDoc);
+              addFields(epw.getEntity(), parentDoc, arow, vr);
+            }
           }
           if (epw.getEntity().getChildren() != null) {
             vr.addNamespace(epw.getEntity().getName(), arow);
             for (EntityProcessorWrapper child : epw.getChildren()) {
-              buildDocument(vr, doc,
+              if (childDoc != null) {
+              buildDocument(vr, childDoc,
                   child.getEntity().isDocRoot() ? pk : null, child, false, ctx, entitiesToDestroy);
+              } else {
+                buildDocument(vr, parentDoc,
+                    child.getEntity().isDocRoot() ? pk : null, child, false, ctx, entitiesToDestroy);
+              }
             }
             vr.removeNamespace(epw.getEntity().getName());
           }
           if (epw.getEntity().isDocRoot()) {
             if (stop.get())
               return;
-            if (!doc.isEmpty()) {
-              boolean result = writer.upload(doc);
+            if (!parentDoc.isEmpty()) {
+              boolean result = writer.upload(parentDoc);
               if(reqParams.isDebug()) {
-                reqParams.getDebugInfo().debugDocuments.add(doc);
+                reqParams.getDebugInfo().debugDocuments.add(parentDoc);
               }
-              doc = null;
+              parentDoc = null;
               if (result){
                 importStatistics.docCount.incrementAndGet();
               } else {
@@ -523,10 +537,10 @@ public class DocBuilder {
           if (isRoot) {
             if (e.getErrCode() == DataImportHandlerException.SKIP) {
               importStatistics.skipDocCount.getAndIncrement();
-              doc = null;
+              parentDoc = null;
             } else {
               SolrException.log(LOG, "Exception while processing: "
-                      + epw.getEntity().getName() + " document : " + doc, e);
+                      + epw.getEntity().getName() + " document : " + parentDoc, e);
             }
             if (e.getErrCode() == DataImportHandlerException.SEVERE)
               throw e;
