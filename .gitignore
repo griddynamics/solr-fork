@@ -1,1 +1,19 @@
-/bin/
+bin/
+build/
+dist/
+eclipse-build/
+.caches/
+
+
+# Binary #
+################
+*.jar
+*.war
+*.ear
+
+
+# Eclipse #
+################
+.project
+.classpath
+.settings/

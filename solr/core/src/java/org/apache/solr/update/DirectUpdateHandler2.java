@@ -21,12 +21,8 @@
 package org.apache.solr.update;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.index.CodecReader;
-import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.LeafReaderContext;
-import org.apache.lucene.index.SlowCodecReaderWrapper;
-import org.apache.lucene.index.Term;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.index.*;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanClause.Occur;
@@ -236,10 +232,16 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
 
             if (cmd.isBlock()) {
               writer.updateDocuments(updateTerm, cmd);
-            } else {
+             } else {
               Document luceneDocument = cmd.getLuceneDocument();
-              // SolrCore.verbose("updateDocument",updateTerm,luceneDocument,writer);
-              writer.updateDocument(updateTerm, luceneDocument);
+              
+              if (cmd.isInPlaceUpdate) {
+                for(IndexableField field: luceneDocument.getFields())
+                  if(cmd.req.getSchema().getField(field.name()).hasDocValues())
+                    writer.updateNumericDocValue(updateTerm, field.name(), field.numericValue().longValue());
+              }
+              else
+                writer.updateDocument(updateTerm, luceneDocument);
             }
             // SolrCore.verbose("updateDocument",updateTerm,"DONE");
             

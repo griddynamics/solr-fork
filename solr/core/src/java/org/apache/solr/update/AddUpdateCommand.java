@@ -43,6 +43,10 @@ public class AddUpdateCommand extends UpdateCommand implements Iterable<Document
    // Higher level SolrInputDocument, normally used to construct the Lucene Document
    // to index.
    public SolrInputDocument solrDoc;
+   
+   // In case the document requires just in-place partial update for docValues, then
+   // the partialDoc can be populated.
+   public boolean isInPlaceUpdate;
 
    public boolean overwrite = true;
    

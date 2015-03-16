@@ -18,6 +18,7 @@ package org.apache.solr;
  */
 
 import junit.framework.Assert;
+
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.util.Constants;
 import org.apache.lucene.util.TestUtil;
@@ -45,6 +46,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.annotation.*;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -868,6 +870,21 @@ public abstract class BaseDistributedSearchTestCase extends SolrTestCaseJ4 {
       }
     }
     compareSolrResponses(a, b);
+  }
+
+  private final static int DEFAULT_MAX_SHARD_COUNT = 3;
+
+  @Retention(RetentionPolicy.RUNTIME)
+  @Target(ElementType.METHOD)
+  public @interface ShardsRepeat {
+    public abstract int min() default 1;
+    public abstract int max() default DEFAULT_MAX_SHARD_COUNT;
+  }
+
+  @Retention(RetentionPolicy.RUNTIME)
+  @Target(ElementType.METHOD)
+  public @interface ShardsFixed {
+    public abstract int num();
   }
 
   @Test
