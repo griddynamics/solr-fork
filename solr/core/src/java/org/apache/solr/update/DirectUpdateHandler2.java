@@ -20,46 +20,34 @@
 
 package org.apache.solr.update;
 
+import java.io.IOException;
+import java.net.URL;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.apache.commons.lang.math.NumberUtils;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.index.*;
 import org.apache.lucene.queries.function.ValueSource;
-import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.BooleanQuery;
-import org.apache.lucene.search.MatchAllDocsQuery;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.TermQuery;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.core.SolrConfig.UpdateHandlerInfo;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.request.LocalSolrQueryRequest;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.request.SolrRequestInfo;
+import org.apache.solr.request.*;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
-import org.apache.solr.search.FunctionRangeQuery;
-import org.apache.solr.search.QParser;
+import org.apache.solr.search.*;
 import org.apache.solr.search.QueryUtils;
-import org.apache.solr.search.SolrIndexSearcher;
-import org.apache.solr.search.SyntaxError;
 import org.apache.solr.search.function.ValueSourceRangeFilter;
 import org.apache.solr.util.RefCounted;
-
-import java.io.IOException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * <code>DirectUpdateHandler2</code> implements an UpdateHandler where documents are added
@@ -231,17 +219,29 @@ public class DirectUpdateHandler2 extends UpdateHandler implements SolrCoreState
             }
 
             if (cmd.isBlock()) {
+
               writer.updateDocuments(updateTerm, cmd);
+
              } else {
-              Document luceneDocument = cmd.getLuceneDocument();
-              
+
               if (cmd.isInPlaceUpdate) {
-                for(IndexableField field: luceneDocument.getFields())
-                  if(cmd.req.getSchema().getField(field.name()).hasDocValues())
-                    writer.updateNumericDocValue(updateTerm, field.name(), field.numericValue().longValue());
-              }
-              else
+                final String idFieldName = cmd.req.getSchema().getUniqueKeyField().getName();
+                final SolrInputDocument solrInputDocument = cmd.solrDoc;
+                for (String fieldName : solrInputDocument.getFieldNames()) {
+                  if (fieldName.startsWith("_") || idFieldName.equals(fieldName)) { // skip technical or ID
+                    continue;
+                  }
+                  if(cmd.req.getSchema().getField(fieldName).hasDocValues()) {
+                    writer.updateNumericDocValue(updateTerm, fieldName, NumberUtils.toLong(String.valueOf(solrInputDocument.getFieldValue(fieldName))));
+                  }
+                }
+
+              } else {
+
+                Document luceneDocument = cmd.getLuceneDocument();
                 writer.updateDocument(updateTerm, luceneDocument);
+
+              }
             }
             // SolrCore.verbose("updateDocument",updateTerm,"DONE");
             
