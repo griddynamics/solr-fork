@@ -1,22 +1,5 @@
 package org.apache.lucene.codecs.simd;
 
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,8 +30,6 @@ import static org.apache.lucene.codecs.simd.SIMDPostingsFormat.MAX_SKIP_LEVELS;
 /**
  * Concrete class that reads docId(maybe frq,pos,offset,payloads) list
  * with postings format.
- *
- * @lucene.experimental
  */
 public final class SIMDPostingsReader extends PostingsReaderBase {
 
@@ -464,7 +445,7 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
     
     private final byte[] encoded;
 
-    private final int[] docDeltaBuffer = new int[MAX_DATA_SIZE];
+    private final int[] docBuffer = new int[MAX_DATA_SIZE];
     private final int[] freqBuffer = new int[MAX_DATA_SIZE];
     private final int[] posDeltaBuffer = new int[MAX_DATA_SIZE];
 
@@ -593,14 +574,14 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
       assert left > 0;
 
       if (left >= BLOCK_SIZE) {
-        forUtil.readBlock(docIn, encoded, docDeltaBuffer);
+        forUtil.readBlock(docIn, encoded, docBuffer);
         forUtil.readBlock(docIn, encoded, freqBuffer);
       } else if (docFreq == 1) {
-        docDeltaBuffer[0] = singletonDocID;
+        docBuffer[0] = singletonDocID;
         freqBuffer[0] = (int) totalTermFreq;
       } else {
         // Read vInts:
-        readVIntBlock(docIn, docDeltaBuffer, freqBuffer, left, true);
+        readVIntBlock(docIn, docBuffer, freqBuffer, left, true);
       }
       docBufferUpto = 0;
     }
@@ -644,7 +625,7 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
           refillDocs();
         }
 
-        accum += docDeltaBuffer[docBufferUpto];
+        accum += docBuffer[docBufferUpto];
         freq = freqBuffer[docBufferUpto];
         posPendingCount += freq;
         docBufferUpto++;
@@ -708,7 +689,7 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
       // Now scan... this is an inlined/pared down version
       // of nextDoc():
       while (true) {
-        accum += docDeltaBuffer[docBufferUpto];
+        accum += docBuffer[docBufferUpto];
         freq = freqBuffer[docBufferUpto];
         posPendingCount += freq;
         docBufferUpto++;

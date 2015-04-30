@@ -1,22 +1,5 @@
 package org.apache.lucene.codecs.simd;
 
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 import java.io.IOException;
 
 import org.apache.lucene.codecs.BlockTermState;
@@ -42,10 +25,7 @@ import static org.apache.lucene.codecs.simd.SIMDPostingsFormat.MAX_SKIP_LEVELS;
  * Concrete class that writes docId(maybe frq,pos,offset,payloads) list
  * with postings format.
  *
- * Postings list for each term will be stored separately. 
- *
- * @see org.apache.lucene.codecs.lucene50.Lucene50SkipWriter for details about skipping setting and postings layout.
- * @lucene.experimental
+ * Postings list for each term will be stored separately.
  */
 public final class SIMDPostingsWriter extends PushPostingsWriterBase {
 
@@ -61,7 +41,7 @@ public final class SIMDPostingsWriter extends PushPostingsWriterBase {
   private long posStartFP;
   private long payStartFP;
 
-  final int[] docDeltaBuffer;
+  final int[] docBuffer;
   final int[] freqBuffer;
   private int docBufferUpto;
 
@@ -141,7 +121,7 @@ public final class SIMDPostingsWriter extends PushPostingsWriterBase {
       }
     }
 
-    docDeltaBuffer = new int[MAX_DATA_SIZE];
+    docBuffer = new int[MAX_DATA_SIZE];
     freqBuffer = new int[MAX_DATA_SIZE];
 
     // TODO: should we try skipping every 2/4 blocks...?
@@ -210,7 +190,7 @@ public final class SIMDPostingsWriter extends PushPostingsWriterBase {
       throw new CorruptIndexException("docs out of order (" + docID + " <= " + lastDocID + " )", docOut.toString());
     }
 
-    docDeltaBuffer[docBufferUpto] = docID;
+    docBuffer[docBufferUpto] = docID;
     if (writeFreqs) {
       freqBuffer[docBufferUpto] = termDocFreq;
     }
@@ -219,7 +199,7 @@ public final class SIMDPostingsWriter extends PushPostingsWriterBase {
     docCount++;
 
     if (docBufferUpto == BLOCK_SIZE) {
-      forUtil.writeBlock(docDeltaBuffer, encoded, docOut);
+      forUtil.writeBlock(docBuffer, encoded, docOut);
       if (writeFreqs) {
         forUtil.writeBlock(freqBuffer, encoded, docOut);
       }
@@ -311,19 +291,19 @@ public final class SIMDPostingsWriter extends PushPostingsWriterBase {
     final int singletonDocID;
     if (state.docFreq == 1) {
       // pulse the singleton docid into the term dictionary, freq is implicitly totalTermFreq
-      singletonDocID = docDeltaBuffer[0];
+      singletonDocID = docBuffer[0];
     } else {
       singletonDocID = -1;
       // vInt encode the remaining doc deltas and freqs:
       for(int i=0;i<docBufferUpto;i++) {
-        final int docDelta = docDeltaBuffer[i];
+        final int docId = docBuffer[i];
         final int freq = freqBuffer[i];
         if (!writeFreqs) {
-          docOut.writeVInt(docDelta);
+          docOut.writeVInt(docId);
         } else if (freqBuffer[i] == 1) {
-          docOut.writeVInt((docDelta<<1)|1);
+          docOut.writeVInt((docId<<1)|1);
         } else {
-          docOut.writeVInt(docDelta<<1);
+          docOut.writeVInt(docId<<1);
           docOut.writeVInt(freq);
         }
       }

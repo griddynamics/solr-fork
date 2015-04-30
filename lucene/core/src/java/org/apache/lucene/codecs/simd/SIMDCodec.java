@@ -22,7 +22,8 @@ import org.apache.lucene.codecs.FilterCodec;
 import org.apache.lucene.codecs.PostingsFormat;
 
 /**
- * Created by imamontov on 2/17/15.
+ * 
+ * @author imamontov
  */
 public class SIMDCodec extends FilterCodec {
 
