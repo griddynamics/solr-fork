@@ -29,16 +29,28 @@
 #   ant run-task -Dtask.alg=conf/indexLineFile.alg
 #
 
-analyzer=org.apache.lucene.analysis.core.SimpleAnalyzer
-
 # Feed that knows how to process the line file format:
 content.source=org.apache.lucene.benchmark.byTask.feeds.LineDocSource
 
 # File that contains one document per line:
-docs.file=work/reuters.lines.txt
+docs.file=work/enwiki.txt
 
 # Process documents only once:
+merge.factor=mrg:10
+max.field.length=2147483647
+max.buffered=buf:100
+compound=false
 content.source.forever=false
+
+analyzer=org.apache.lucene.analysis.standard.StandardAnalyzer
+directory=FSDirectory
+
+doc.stored=false
+doc.tokenized=true
+doc.term.vector=false
+doc.body.tokenized.norms=false
+doc.body.indexOpt=DOCS_ONLY
+log.step=5000
 
 # -------------------------------------------------------------------------------------
 
