@@ -51,6 +51,8 @@ doc.term.vector=false
 doc.body.tokenized.norms=false
 doc.body.indexOpt=DOCS_ONLY
 log.step=5000
+# default.codec=org.apache.lucene.codecs.lucene50.Lucene50Codec
+default.codec=org.apache.lucene.codecs.simd.SIMDCodec
 
 # -------------------------------------------------------------------------------------
 

@@ -177,7 +177,7 @@ public class CreateIndexTask extends PerfTask {
       iwConf.setMaxBufferedDocs(maxBuffered);
       iwConf.setRAMBufferSizeMB(ramBuffer);
     }
-    
+
     return iwConf;
   }
   
