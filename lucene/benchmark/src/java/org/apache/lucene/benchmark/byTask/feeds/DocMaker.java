@@ -44,6 +44,7 @@ import org.apache.lucene.document.FloatField;
 import org.apache.lucene.document.DoubleField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.FieldInfo.IndexOptions;
 
 /**
  * Creates {@link Document} objects. Uses a {@link ContentSource} to generate
@@ -433,6 +434,7 @@ public class DocMaker implements Closeable {
     boolean termVec = config.get("doc.term.vector", false);
     boolean termVecPositions = config.get("doc.term.vector.positions", false);
     boolean termVecOffsets = config.get("doc.term.vector.offsets", false);
+    IndexOptions bodyIndexOpts = IndexOptions.valueOf(config.get("doc.body.indexOpt", IndexOptions.DOCS_AND_FREQS_AND_POSITIONS.toString()));
     
     valType = new FieldType(TextField.TYPE_NOT_STORED);
     valType.setStored(stored);
@@ -447,6 +449,7 @@ public class DocMaker implements Closeable {
     bodyValType.setStored(bodyStored);
     bodyValType.setTokenized(bodyTokenized);
     bodyValType.setOmitNorms(!bodyNorms);
+    bodyValType.setIndexOptions(bodyIndexOpts);
     bodyValType.setStoreTermVectors(termVec);
     bodyValType.setStoreTermVectorPositions(termVecPositions);
     bodyValType.setStoreTermVectorOffsets(termVecOffsets);
