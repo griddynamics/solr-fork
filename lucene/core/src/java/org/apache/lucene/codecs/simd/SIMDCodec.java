@@ -17,9 +17,9 @@ package org.apache.lucene.codecs.simd;
  * limitations under the License.
  */
 
-import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.FilterCodec;
 import org.apache.lucene.codecs.PostingsFormat;
+import org.apache.lucene.codecs.lucene50.Lucene50Codec;
 
 /**
  * 
@@ -27,18 +27,9 @@ import org.apache.lucene.codecs.PostingsFormat;
  */
 public class SIMDCodec extends FilterCodec {
 
-  /**
-   * Sole constructor. When subclassing this codec,
-   * create a no-arg ctor and pass the delegate codec
-   * and a unique name to this ctor.
-   *
-   * @param name
-   * @param delegate
-   */
-  protected SIMDCodec(String name, Codec delegate) {
-    super(name, delegate);
+ public SIMDCodec() {
+    super("SIMDCodec", new Lucene50Codec());
   }
-
   @Override
   public PostingsFormat postingsFormat() {
     return new SIMDPostingsFormat();
