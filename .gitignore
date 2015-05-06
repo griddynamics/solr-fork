@@ -25,6 +25,8 @@ parent.iml
 **/pom.xml
 /nbproject
 /nb-build
+/lucene/benchmark/work
+/lucene/benchmark/temp
 
 /solr/package
 
