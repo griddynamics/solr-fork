@@ -70,7 +70,7 @@ final class ForUtil {
    * @throws java.io.IOException If there is a low-level I/O error
    */
   void writeBlock(int[] data, byte[] encoded, IndexOutput out) throws IOException {
-    int encodedSize = edu.Codecs.encodeCritical(data, 0, 128, encoded);
+    int encodedSize = edu.Codecs.encodeCritical(data, 0, BLOCK_SIZE, encoded);
     out.writeInt(encodedSize);
     out.writeBytes(encoded, encodedSize);
   }
@@ -86,7 +86,7 @@ final class ForUtil {
   void readBlock(IndexInput in, byte[] encoded, int[] decoded) throws IOException {
     final int encodedSize = in.readInt();
     in.readBytes(encoded, 0, encodedSize);
-    edu.Codecs.uncompressCritical(decoded, encoded);
+    edu.Codecs.decodeCritical(encoded, BLOCK_SIZE, decoded);
   }
 
   /**

@@ -27,12 +27,17 @@ import org.junit.Ignore;
 /**
  * Tests BlockPostingsFormat
  */
-public class TestBlockPostingsFormat extends BasePostingsFormatTestCase {
+public class TestSIMDPostingsFormat extends BasePostingsFormatTestCase {
   private final Codec codec = TestUtil.alwaysPostingsFormat(new SIMDPostingsFormat());
 
   @Override
   protected Codec getCodec() {
     return codec;
+  }
+
+  @Override
+  public void testDocsOnly() throws Exception {
+    super.testDocsOnly();
   }
 
   @Override

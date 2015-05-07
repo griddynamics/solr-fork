@@ -214,7 +214,7 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
   final class BlockDocsEnum extends DocsEnum {
     private final byte[] encoded;
     
-    private final int[] docDeltaBuffer = new int[MAX_DATA_SIZE];
+    private final int[] docBuffer = new int[MAX_DATA_SIZE];
     private final int[] freqBuffer = new int[MAX_DATA_SIZE];
 
     private int docBufferUpto;
@@ -234,7 +234,6 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
     private long totalTermFreq;                       // sum of freqs in this posting list (or docFreq when omitted)
     private int docUpto;                              // how many docs we've read
     private int doc;                                  // doc we last read
-    private int accum;                                // accumulator for doc deltas
     private int freq;                                 // freq we last read
 
     // Where this term's postings start in the .doc file:
@@ -292,7 +291,6 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
       if (!indexHasFreq) {
         Arrays.fill(freqBuffer, 1);
       }
-      accum = 0;
       docUpto = 0;
       nextSkipDoc = BLOCK_SIZE - 1; // we won't skip if target is found in first block
       docBufferUpto = BLOCK_SIZE;
@@ -315,7 +313,7 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
       assert left > 0;
 
       if (left >= BLOCK_SIZE) {
-        forUtil.readBlock(docIn, encoded, docDeltaBuffer);
+        forUtil.readBlock(docIn, encoded, docBuffer);
 
         if (indexHasFreq) {
           if (needsFreq) {
@@ -325,11 +323,11 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
           }
         }
       } else if (docFreq == 1) {
-        docDeltaBuffer[0] = singletonDocID;
+        docBuffer[0] = singletonDocID;
         freqBuffer[0] = (int) totalTermFreq;
       } else {
         // Read vInts:
-        readVIntBlock(docIn, docDeltaBuffer, freqBuffer, left, indexHasFreq);
+        readVIntBlock(docIn, docBuffer, freqBuffer, left, indexHasFreq);
       }
       docBufferUpto = 0;
     }
@@ -345,11 +343,11 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
           refillDocs();
         }
 
-        accum += docDeltaBuffer[docBufferUpto];
+        int docFromBuffer = docBuffer[docBufferUpto];
         docUpto++;
 
-        if (liveDocs == null || liveDocs.get(accum)) {
-          doc = accum;
+        if (liveDocs == null || liveDocs.get(docFromBuffer)) {
+          doc = docFromBuffer;
           freq = freqBuffer[docBufferUpto];
           docBufferUpto++;
           return doc;
@@ -395,7 +393,6 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
 
           // Force to read next block
           docBufferUpto = BLOCK_SIZE;
-          accum = skipper.getDoc();               // actually, this is just lastSkipEntry
           docIn.seek(skipper.getDocPointer());    // now point to the block we want to search
         }
         // next time we call advance, this is used to 
@@ -411,11 +408,12 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
 
       // Now scan... this is an inlined/pared down version
       // of nextDoc():
+      int docFromBuffer = 0;
       while (true) {
-        accum += docDeltaBuffer[docBufferUpto];
+        docFromBuffer = docBuffer[docBufferUpto];
         docUpto++;
 
-        if (accum >= target) {
+        if (docFromBuffer >= target) {
           break;
         }
         docBufferUpto++;
@@ -424,10 +422,10 @@ public final class SIMDPostingsReader extends PostingsReaderBase {
         }
       }
 
-      if (liveDocs == null || liveDocs.get(accum)) {
+      if (liveDocs == null || liveDocs.get(docFromBuffer)) {
         freq = freqBuffer[docBufferUpto];
         docBufferUpto++;
-        return doc = accum;
+        return doc = docFromBuffer;
       } else {
         docBufferUpto++;
         return nextDoc();
