@@ -64,6 +64,7 @@ public class FileBasedQueryMaker extends AbstractQueryMaker implements QueryMake
     String fileName = config.get("file.query.maker.file", null);
     if (fileName != null) {
       Path path = Paths.get(fileName);
+      System.out.println("path = " + path);
       Reader reader = null;
       // note: we use a decoding reader, so if your queries are screwed up you know
       if (Files.exists(path)) {
