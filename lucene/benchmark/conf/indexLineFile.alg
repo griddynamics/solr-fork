@@ -53,6 +53,7 @@ doc.body.indexOpt=DOCS_ONLY
 log.step=5000
 # default.codec=org.apache.lucene.codecs.lucene50.Lucene50Codec
 default.codec=org.apache.lucene.codecs.simd.SIMDCodec
+merge.policy=org.apache.lucene.index.NoMergePolicy
 
 # -------------------------------------------------------------------------------------
 
