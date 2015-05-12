@@ -1,19 +1,22 @@
 package org.apache.lucene.benchmark.byTask.feeds;
 
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.queryparser.classic.ParseException;
-import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.benchmark.byTask.tasks.NewAnalyzerTask;
-import org.apache.lucene.util.IOUtils;
-
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.benchmark.byTask.tasks.NewAnalyzerTask;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.util.IOUtils;
 
 /**
  * Copyright 2004 The Apache Software Foundation
@@ -34,33 +37,32 @@ import java.util.List;
 /**
  * Create queries from a FileReader.  One per line, pass them through the
  * QueryParser.  Lines beginning with # are treated as comments
- *
+ * <p/>
  * File can be specified as a absolute, relative or resource.
  * Two properties can be set:
  * file.query.maker.file=&lt;Full path to file containing queries&gt;
  * <br/>
  * file.query.maker.default.field=&lt;Name of default field - Default value is "body"&gt;
- *
+ * <p/>
  * Example:
  * file.query.maker.file=c:/myqueries.txt
  * file.query.maker.default.field=body
  */
-public class FileBasedQueryMaker extends AbstractQueryMaker implements QueryMaker{
+public class FileBasedQueryMaker extends AbstractQueryMaker implements QueryMaker {
 
 
   @Override
   protected Query[] prepareQueries() throws Exception {
 
     Analyzer anlzr = NewAnalyzerTask.createAnalyzer(config.get("analyzer",
-            "org.apache.lucene.analysis.standard.StandardAnalyzer"));
+        "org.apache.lucene.analysis.standard.StandardAnalyzer"));
     String defaultField = config.get("file.query.maker.default.field", DocMaker.BODY_FIELD);
     QueryParser qp = new QueryParser(defaultField, anlzr);
     qp.setAllowLeadingWildcard(true);
 
     List<Query> qq = new ArrayList<>();
     String fileName = config.get("file.query.maker.file", null);
-    if (fileName != null)
-    {
+    if (fileName != null) {
       Path path = Paths.get(fileName);
       Reader reader = null;
       // note: we use a decoding reader, so if your queries are screwed up you know
@@ -76,18 +78,12 @@ public class FileBasedQueryMaker extends AbstractQueryMaker implements QueryMake
       if (reader != null) {
         try {
           BufferedReader buffered = new BufferedReader(reader);
-          String line = null;
-          int lineNum = 0;
+          String line;
           while ((line = buffered.readLine()) != null) {
             line = line.trim();
             if (line.length() != 0 && !line.startsWith("#")) {
-              try {
-                qq.add(qp.parse(line));
-              } catch (ParseException e) {
-                System.err.println("Exception: " + e.getMessage() + " occurred while parsing line: " + lineNum + " Text: " + line);
-              }
+              qq.add(new TermQuery(new Term(DocMaker.BODY_FIELD, line)));
             }
-            lineNum++;
           }
         } finally {
           reader.close();
@@ -95,8 +91,7 @@ public class FileBasedQueryMaker extends AbstractQueryMaker implements QueryMake
       } else {
         System.err.println("No Reader available for: " + fileName);
       }
-      
     }
-    return qq.toArray(new Query[qq.size()]) ;
+    return qq.toArray(new Query[qq.size()]);
   }
 }
