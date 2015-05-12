@@ -4,7 +4,7 @@ public class Codecs {
 
     static {
         try {
-            System.loadLibrary("util");
+          System.load("/home/perf/projects/SIMD4Lucene/native/linux/target/libutil.so");
         } catch (UnsatisfiedLinkError e) {
             System.err.println("Native code library failed to load from path '" + System.getProperty("java.library.path") + "'" + e);
             System.exit(1);
