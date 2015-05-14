@@ -23,8 +23,7 @@ directory=FSDirectory
 doc.stored=true
 doc.tokenized=true
 doc.term.vector=false
-log.step=2000
-
+log.step=10000
 docs.dir=reuters-out
 
 query.maker=org.apache.lucene.benchmark.byTask.feeds.FileBasedQueryMaker
@@ -33,24 +32,14 @@ file.query.maker.file=/home/perf/projects/solr-fork/lucene/benchmark/conf/10K-wi
 # task at this depth or less would print when they start
 task.max.depth.log=2
 
-#log.queries=true
-#print.hits.field=docid
-
 # -------------------------------------------------------------------------------------
 
 { "Rounds"
-
-
-
     OpenReader
     { "Warmup" Search > : 20000
-    { "SearchSameRdr" Search > : 100000
+    [
+      { "SearchSameRdr" Search > : 100000
+    ]:1
     CloseReader
-
-    RepSumByPref Search
-
 }
-
 RepSumByNameRound
-RepSumByName
-RepSumByPrefRound Search
