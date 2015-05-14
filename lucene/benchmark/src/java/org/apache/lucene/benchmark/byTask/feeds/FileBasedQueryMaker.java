@@ -14,6 +14,7 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.benchmark.byTask.tasks.NewAnalyzerTask;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.ConstantScoreQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.util.IOUtils;
@@ -83,7 +84,8 @@ public class FileBasedQueryMaker extends AbstractQueryMaker implements QueryMake
           while ((line = buffered.readLine()) != null) {
             line = line.trim();
             if (line.length() != 0 && !line.startsWith("#")) {
-              qq.add(new TermQuery(new Term(DocMaker.BODY_FIELD, line)));
+              TermQuery termQuery = new TermQuery(new Term(DocMaker.BODY_FIELD, line));
+              qq.add(new ConstantScoreQuery(termQuery));
             }
           }
         } finally {

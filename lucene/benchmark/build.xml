@@ -207,6 +207,7 @@
         <java classname="org.apache.lucene.benchmark.byTask.Benchmark" maxmemory="${task.mem}" fork="true">
             <classpath refid="run.classpath"/>
             <arg file="${task.alg}"/>
+            <jvmarg line="-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:FlightRecorderOptions=loglevel=info,stackdepth=512"/>
         </java>
     </target>
 

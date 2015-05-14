@@ -36,14 +36,17 @@ content.source=org.apache.lucene.benchmark.byTask.feeds.LineDocSource
 docs.file=work/enwiki.txt
 
 # Process documents only once:
-merge.factor=mrg:10
 max.field.length=2147483647
-max.buffered=buf:100
 compound=false
 content.source.forever=false
 
 analyzer=org.apache.lucene.analysis.standard.StandardAnalyzer
 directory=FSDirectory
+
+#disable index segmentation
+ram.flush.mb=6000
+max.buffered=10000000
+merge.policy=org.apache.lucene.index.NoMergePolicy
 
 doc.stored=false
 doc.tokenized=true
@@ -53,7 +56,6 @@ doc.body.indexOpt=DOCS_ONLY
 log.step=5000
 # default.codec=org.apache.lucene.codecs.lucene50.Lucene50Codec
 default.codec=org.apache.lucene.codecs.simd.SIMDCodec
-merge.policy=org.apache.lucene.index.NoMergePolicy
 
 # -------------------------------------------------------------------------------------
 

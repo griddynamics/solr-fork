@@ -28,7 +28,7 @@ log.step=2000
 docs.dir=reuters-out
 
 query.maker=org.apache.lucene.benchmark.byTask.feeds.FileBasedQueryMaker
-file.query.maker.file=10K-wiki-body-terms.txt
+file.query.maker.file=/home/perf/projects/solr-fork/lucene/benchmark/conf/10K-wiki-body-terms.txt
 
 # task at this depth or less would print when they start
 task.max.depth.log=2
@@ -44,7 +44,7 @@ task.max.depth.log=2
 
     OpenReader
     { "Warmup" Search > : 20000
-    { "SearchSameRdr" Search > : 50000
+    { "SearchSameRdr" Search > : 100000
     CloseReader
 
     RepSumByPref Search
