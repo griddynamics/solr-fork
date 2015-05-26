@@ -26,6 +26,8 @@ doc.term.vector=false
 log.step=10000
 docs.dir=reuters-out
 
+search.num.hits=1000
+
 query.maker=org.apache.lucene.benchmark.byTask.feeds.FileBasedQueryMaker
 file.query.maker.file=/home/perf/projects/solr-fork/lucene/benchmark/conf/10K-wiki-body-terms.txt
 
