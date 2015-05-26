@@ -46,6 +46,8 @@ final class ForUtil {
    */
   static final int MAX_DATA_SIZE = 1024;
 
+  private static final byte ALL_VALUES_EQUAL = 0;
+
   /**
    * Create a new {@link org.apache.lucene.codecs.lucene50.ForUtil} instance and save state into <code>out</code>.
    */
@@ -70,8 +72,25 @@ final class ForUtil {
    * @throws java.io.IOException If there is a low-level I/O error
    */
   void writeBlock(int[] data, byte[] encoded, IndexOutput out) throws IOException {
+    if (isAllEqual(data)) {
+      out.writeByte(ALL_VALUES_EQUAL);
+      out.writeVInt(data[0]);
+      out.writeVInt(data[1] - data[0]);
+      return;
+    }
+
     int encodedSize = edu.Codecs.encodeCritical(data, 0, BLOCK_SIZE, encoded);
     out.writeBytes(encoded, encodedSize);
+  }
+
+  private static boolean isAllEqual(final int[] data) {
+    final int v = data[1] - data[0];
+    for (int i = 2; i < BLOCK_SIZE; i++) {
+      if (data[i] - data[i - 1] != v) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -84,6 +103,16 @@ final class ForUtil {
    */
   void readBlock(IndexInput in, byte[] encoded, int[] decoded) throws IOException {
     final byte numBits = in.readByte();
+    assert numBits <= 32 : numBits;
+    if (numBits == ALL_VALUES_EQUAL) {
+      final int value = in.readVInt();
+      int delta = in.readVInt();
+      for (int i = 0; i < BLOCK_SIZE; i++) {
+        decoded[i] = value + i * delta;
+      }
+      return;
+    }
+
     encoded[0] = numBits;
     in.readBytes(encoded, 1, numBits << 4);
     edu.Codecs.decodeCritical(encoded, decoded);
@@ -96,7 +125,13 @@ final class ForUtil {
    * @throws java.io.IOException If there is a low-level I/O error
    */
   void skipBlock(IndexInput in) throws IOException {
-    final int numBytes = in.readInt();
-    in.seek(in.getFilePointer() + numBytes);
+    final int numBits = in.readByte();
+    if (numBits == ALL_VALUES_EQUAL) {
+      in.readVInt();
+      in.readVInt();
+      return;
+    }
+    assert numBits > 0 && numBits <= 32 : numBits;
+    in.seek(in.getFilePointer() + (numBits << 4));
   }
 }
