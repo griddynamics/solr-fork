@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.lucene.util.Bits;
-
 import org.apache.lucene.index.MultiDocValues.MultiSortedDocValues;
 import org.apache.lucene.index.MultiDocValues.MultiSortedSetDocValues;
 import org.apache.lucene.index.MultiDocValues.OrdinalMap;
@@ -134,16 +133,18 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
         return dv;
       }
     }
-    // cached ordinal map
-    if (getFieldInfos().fieldInfo(field).getDocValuesType() != DocValuesType.SORTED) {
-      return null;
-    }
     int size = in.leaves().size();
     final SortedDocValues[] values = new SortedDocValues[size];
     final int[] starts = new int[size+1];
     for (int i = 0; i < size; i++) {
       LeafReaderContext context = in.leaves().get(i);
-      SortedDocValues v = context.reader().getSortedDocValues(field);
+      final LeafReader reader = context.reader();
+      // cached ordinal map???
+      FieldInfo fieldInfo = reader.getFieldInfos().fieldInfo(field);
+      if(fieldInfo != null && fieldInfo.getDocValuesType() != DocValuesType.SORTED) {
+        return null;
+      }
+      SortedDocValues v = reader.getSortedDocValues(field);
       if (v == null) {
         v = DocValues.emptySorted();
       }
@@ -172,17 +173,21 @@ public final class SlowCompositeReaderWrapper extends LeafReader {
         return dv;
       }
     }
-    // cached ordinal map
-    if (getFieldInfos().fieldInfo(field).getDocValuesType() != DocValuesType.SORTED_SET) {
-      return null;
-    }
+   
     assert map != null;
     int size = in.leaves().size();
     final SortedSetDocValues[] values = new SortedSetDocValues[size];
     final int[] starts = new int[size+1];
     for (int i = 0; i < size; i++) {
       LeafReaderContext context = in.leaves().get(i);
-      SortedSetDocValues v = context.reader().getSortedSetDocValues(field);
+      // cached ordinal map ???
+      final LeafReader reader = context.reader();
+
+      FieldInfo fieldInfo = reader.getFieldInfos().fieldInfo(field);
+      if(fieldInfo != null && fieldInfo.getDocValuesType() != DocValuesType.SORTED_SET) {
+        return null;
+      }
+      SortedSetDocValues v = reader.getSortedSetDocValues(field);
       if (v == null) {
         v = DocValues.emptySortedSet();
       }
